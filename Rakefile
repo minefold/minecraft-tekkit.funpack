@@ -2,26 +2,39 @@ task :default => :test
 
 task :test do
   system %Q{
-    rm -rf tmp/world
-    mkdir -p tmp/world
-    cp -R test-world/* tmp/world
+    rm -rf tmp/1234
+    mkdir -p tmp/1234/working
+    cp -R test-world/* tmp/1234/working
   }
 
-  File.write 'tmp/world/settings.json', <<-EOS
+  File.write 'tmp/1234/server.json', <<-EOS
 {
-  "options" : {
-    "name": "minecraft-tekkit",
-    "ops": ["whatupdave"],
-    "whitelisted": ["chrislloyd"],
-    "banned": ["atnan"],
+  "id": "1234",
+  "port": 4032,
+  "ram": {
+    "min": 1024,
+    "max": 1024
+  },
+  "settings" : {
+    "blacklist": "atnan",
+    "game_mode": 1,
+    "ops": "whatupdave\\nchrislloyd",
     "seed": 123456789,
     "spawn_animals": true,
     "spawn_monsters": true,
-    "game_mode": 0
+    "whitelist": "whatupdave"
   }
 }
-  EOS
+EOS
 
-  raise "error" unless system "bin/prepare tmp/world tmp/world/settings.json"
-  raise "error" unless system "bin/start tmp/world 4032 1024"
+  run = File.expand_path 'bin/run'
+
+  Dir.chdir('tmp/1234/working') do
+    raise "error" unless system "#{run} ../server.json"
+  end
+end
+
+desc "Update Tekkit server"
+task :update_tekkit do
+  system "curl -L http://cbukk.it/craftbukkit-beta.jar > template/craftbukkit.jar"
 end
