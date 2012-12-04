@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+# encoding: utf-8
+
 # usage: run <server-json>
 # runs the server
 
@@ -42,53 +44,49 @@ class LogProcessor
 
   def process_line line
     line = line.force_encoding('ISO-8859-1').
-              gsub(/\u001b\[m/,''). # strip color sequences out
-              gsub(/>\r[\d:]+\s\[[A-Z]+\]\s/, '').strip  # strip message prefix
+              gsub(/\u001b\[(m|\d+;\dm)?/, ''). # strip color sequences out
+              gsub(/(>)?\r/, '').
+              gsub(/[\d:]+\s\[[A-Z]+\]\s/, '').strip  # strip message prefix
 
-    if @listing
-      players_listing(line)
+    case line
+    when /^<(\w+)> (.*)$/
+      event 'chat', username: $1, msg: $2
+
+    when /Done \(/
+      event 'started'
+
+    when /^Stopping server$/
+      event 'stopping'
+
+    when /^(\w+).*logged in with entity id/
+      event 'player_connected', username: $1
+
+    when /^(\w+) lost connection: (.*)$/
+      event 'player_disconnected', username: $1, reason: $2
+
+    when /^Connected players:(.*)$/
+      @players = $1.split(',').map(&:strip)
+      event 'players_list', usernames: @players
+
+    when /^(\w+): Added (\w+) to white-list/
+      settings_changed $1, 'whitelist_add', $2
+    when /^(\w+): Removed (\w+) from white-list/
+      settings_changed $1, 'whitelist_remove', $2
+    when /^(\w+): Opping (\w+)/
+      settings_changed $1, 'ops_add', $2
+    when /^(\w+): De-opping (\w+)/
+      settings_changed $1, 'ops_remove', $2
+    when /^(\w+): Banning (\w+)/
+      settings_changed $1, 'blacklist_add', $2
+    when /^(\w+): Pardoning (\w+)/
+      settings_changed $1, 'blacklist_remove', $2
+
+    when /FAILED TO BIND TO PORT!/
+      event 'fatal_error'
+      Process.kill :TERM, @pid
+
     else
-      case
-      when line =~ /^<(\w+)> (.*)$/
-        event 'chat', username: $1, msg: $2
-
-      when line.include?('Done (')
-        event 'started'
-
-      when line == 'Stopping server'
-        event 'stopping'
-
-      when line =~ /^(\w+).*logged in with entity id/
-        event 'player_connected', username: $1
-
-      when line =~ /^(\w+) lost connection: (.*)$/
-        event 'player_disconnected', username: $1, reason: $2
-
-      when line =~ /^There are (\d+)\/(\d+) players online:$/
-        @listing = true
-        @online = $1.to_i
-        @players = []
-
-      when line =~ /^(\w+): Added (\w+) to white-list/
-        settings_changed $1, 'whitelist_add', $2
-      when line =~ /^(\w+): Removed (\w+) from white-list/
-        settings_changed $1, 'whitelist_remove', $2
-      when line =~ /^(\w+): Opping (\w+)/
-        settings_changed $1, 'ops_add', $2
-      when line =~ /^(\w+): De-opping (\w+)/
-        settings_changed $1, 'ops_remove', $2
-      when line =~ /^(\w+): Banning (\w+)/
-        settings_changed $1, 'blacklist_add', $2
-      when line =~ /^(\w+): Pardoning (\w+)/
-        settings_changed $1, 'blacklist_remove', $2
-
-      when line.include?('FAILED TO BIND TO PORT!')
-        event 'fatal_error'
-        Process.kill :TERM, @pid
-
-      else
-        event 'info', msg: line.strip
-      end
+      event 'info', msg: line.strip
     end
 
     def settings_changed actor, key, value
@@ -96,14 +94,6 @@ class LogProcessor
         actor: actor,
           key: key,
           value: value.to_s
-    end
-  end
-
-  def players_listing(line)
-    @players += line.split(',').map(&:strip)
-    if @players.size == @online
-      @listing = false
-      event 'players_list', usernames: @players
     end
   end
 

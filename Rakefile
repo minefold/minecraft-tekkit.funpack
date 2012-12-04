@@ -20,8 +20,9 @@ task :test do
     "game_mode": 1,
     "ops": "whatupdave\\nchrislloyd",
     "seed": 123456789,
-    "spawn_animals": true,
-    "spawn_monsters": true,
+    "spawn_animals": "1",
+    "spawn_monsters": "1",
+    "spawn_npcs": "0",
     "whitelist": "whatupdave\\nchrislloyd"
   }
 }
