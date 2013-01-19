@@ -41,3 +41,10 @@ desc "Update Tekkit server"
 task :update_tekkit do
   system "curl -L http://cbukk.it/craftbukkit-beta.jar > template/craftbukkit.jar"
 end
+
+task :publish do
+  paths = %w(bin template Gemfile Gemfile.lock funpack.json)
+  system %Q{
+    archive-dir http://party-cloud-production.s3.amazonaws.com/funpacks/slugs/team-fortress-2/stable.tar.lzo #{paths.join(' ')}
+  }
+end
