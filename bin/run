@@ -50,7 +50,7 @@ class LogProcessor
 
     case line
     when /^<(\w+)> (.*)$/
-      event 'chat', username: $1, msg: $2
+      event 'chat', nick: $1, msg: $2
 
     when /Done \(/
       event 'started'
@@ -59,14 +59,14 @@ class LogProcessor
       event 'stopping'
 
     when /^(\w+).*logged in with entity id/
-      event 'player_connected', username: $1
+      event 'player_connected', auth: 'mojang', uid: $1
 
     when /^(\w+) lost connection: (.*)$/
-      event 'player_disconnected', username: $1, reason: $2
+      event 'player_disconnected', auth: 'mojang', uid: $1, reason: $2
 
     when /^Connected players:(.*)$/
       @players = $1.split(',').map(&:strip)
-      event 'players_list', usernames: @players
+      event 'players_list', auth: 'mojang', uids: @players
 
     when /^(\w+): Added (\w+) to white-list/
       settings_changed $1, 'whitelist_add', $2
