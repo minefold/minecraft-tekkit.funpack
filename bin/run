@@ -84,6 +84,9 @@ class LogProcessor
     when /FAILED TO BIND TO PORT!/
       event 'fatal_error'
       Process.kill :TERM, @pid
+      
+    when 'Player found..', 'Repair is active..'
+      # ignore these SPAM
 
     else
       event 'info', msg: line.strip
