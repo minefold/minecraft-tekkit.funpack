@@ -12,8 +12,11 @@ minecraft.prepare!
 minecraft = Craftbelt::MinecraftInstance.new('.')
 
 puts JSON.dump minecraft.to_h([
+  'buildcraft',
+  'config',
   'plugins',
   'mods',
+  'redpower',
   'ops.txt',
   'server.properties',
   'white-list.txt',

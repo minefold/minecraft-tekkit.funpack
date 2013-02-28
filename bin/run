@@ -23,7 +23,10 @@ data_file = File.expand_path(ENV['DATAFILE'])
 $build = File.expand_path('../..', __FILE__)
 
 # setup working directory
-`yes n | cp -Ri #{$build}/tekkit/* . &2>1`
+bash <<-EOS
+  rsync --ignore-existing --recursive #{$build}/tekkit/ .
+EOS
+
 
 data = JSON.parse(File.read(data_file), symbolize_names: true)
 minecraft = Craftbelt::MinecraftInstance.new('.')
