@@ -1,134 +1,79 @@
 #!/usr/bin/env ruby
 
-# encoding: utf-8
+# encoding: UTF-8
 
-# usage: run <server-json>
-# runs the server
+$:.unshift File.expand_path('../../lib', __FILE__)
 
+require 'bundler/setup'
+
+require 'bash'
 require 'json'
+require 'log_processor'
+require 'craftbelt/minecraft_instance'
+require 'open3'
+require 'settings'
 require 'time'
+
+include Bash
 
 STDOUT.sync = true
 STDIN.sync = true
 
-server_json = ARGV.first
-HUMAN_FRIENDLY = ARGV.include? "-h"
-bin = File.expand_path File.join(__FILE__, '..')
+data_file = File.expand_path(ENV['DATAFILE'])
+$build = File.expand_path('../..', __FILE__)
 
-server_settings = JSON.parse(File.read(server_json))
-system "#{bin}/prepare #{server_json}"
+# setup working directory
+`yes n | cp -Ri #{$build}/tekkit/* . &2>1`
 
-ram_min, ram_max = server_settings['ram']['min'], server_settings['ram']['max']
+data = JSON.parse(File.read(data_file), symbolize_names: true)
+minecraft = Craftbelt::MinecraftInstance.new('.')
 
-# Events:
-# started
-# stopping
-# player_connected      { username: '..' }
-# player_disconnected
-# chatted
-# opped
-# deopped
-# whitelist_added
-# whitelist_removed
-# banned
-# pardoned
-# info
-# warning
-# critical
+schema = JSON.parse(File.read("#{$build}/funpack.json"))['schema']
+s = Settings.new(schema, data[:settings].merge(
+    "name" => data[:name],
+    "level-name" => (minecraft.level_paths.first || 'level')
+  )
+)
+{
+  "server.properties.erb" => 'server.properties',
+}.each do |src, dest|
+  `mkdir -p #{File.dirname(dest)}`
+  File.write(dest, s.erb(File.read("#{$build}/templates/#{src}")))
+end
 
-class LogProcessor
-  def initialize pid
-    @pid = pid
-    @listing = false
-  end
-
-  def process_line line
-    line = line.force_encoding('ISO-8859-1').
-              gsub(/\u001b\[(m|\d+;\dm)?/, ''). # strip color sequences out
-              gsub(/(>)?\r/, '').
-              gsub(/[\d:]+\s\[[A-Z]+\]\s/, '').strip  # strip message prefix
-
-    case line
-    when /^<(\w+)> (.*)$/
-      event 'chat', nick: $1, msg: $2
-
-    when /Done \(/
-      event 'started'
-
-    when /^Stopping server$/
-      event 'stopping'
-
-    when /^(\w+).*logged in with entity id/
-      event 'player_connected', auth: 'mojang', uid: $1
-
-    when /^(\w+) lost connection: (.*)$/
-      event 'player_disconnected', auth: 'mojang', uid: $1, reason: $2
-
-    when /^Connected players:(.*)$/
-      @players = $1.split(',').map(&:strip)
-      event 'players_list', auth: 'mojang', uids: @players
-
-    when /^(\w+): Added (\w+) to white-list/
-      settings_changed $1, 'whitelist_add', $2
-    when /^(\w+): Removed (\w+) from white-list/
-      settings_changed $1, 'whitelist_remove', $2
-    when /^(\w+): Opping (\w+)/
-      settings_changed $1, 'ops_add', $2
-    when /^(\w+): De-opping (\w+)/
-      settings_changed $1, 'ops_remove', $2
-    when /^(\w+): Banning (\w+)/
-      settings_changed $1, 'blacklist_add', $2
-    when /^(\w+): Pardoning (\w+)/
-      settings_changed $1, 'blacklist_remove', $2
-
-    when /FAILED TO BIND TO PORT!/
-      event 'fatal_error'
-      Process.kill :TERM, @pid
-      
-    when 'Player found..', 'Repair is active..'
-      # ignore these SPAM
-
-    else
-      event 'info', msg: line.strip
-    end
-
-    def settings_changed actor, key, value
-      event 'settings_changed',
-        actor: actor,
-          key: key,
-          value: value.to_s
-    end
-  end
-
-  def readable type, options={}
-    "#{Time.now.utc.strftime('%Y-%b-%d %H:%M:%S')} [#{type}] " +
-      options.map{|k,v| "#{k}=#{v.include?(' ') ? ("\"" + v + "\"") : v}"}.join(' ')
-  end
-
-  def json type, options={}
-    args = {ts: Time.now.utc.iso8601, event: type, pid: @pid }.merge(options)
-    JSON.dump(args)
-  end
-
-  def event type, options = {}
-    line = if HUMAN_FRIENDLY
-      readable type, options
-    else
-      json type, options
-    end
-    puts line
+def player_list(player_setting)
+  # TODO remove this if when players are passed as an array
+  if player_setting.is_a? Array
+    player_setting.join("\n")
+  else
+    player_setting
   end
 end
 
-IO.popen(["java",
+File.write('ops.txt', player_list(data[:settings][:ops]))
+File.write('white-list.txt', player_list(data[:settings][:whitelist]))
+
+ram_max = (ENV['RAM'] || 1024).to_i
+ram_min = ram_max
+
+Open3.popen3("java",
             "-Xms#{ram_min}M", "-Xmx#{ram_max}M",
             "-jar", "Tekkit.jar",
-            "nogui", :err => [:child, :out]]) do |io|
+            "nogui") do |stdin, stdout, stderr, wait_thr|
+
+  processor = LogProcessor.new(wait_thr.pid)
+
   begin
-    processor = LogProcessor.new(io.pid)
+    Thread.new do
+      while true
+        stdin.puts STDIN.readline.strip
+      end
+    end
+
     while true
-      processor.process_line io.readline
+      processor.process_line stderr.readline
     end
   rescue EOFError
   end
+  exit_status = wait_thr.value
 end

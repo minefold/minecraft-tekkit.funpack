@@ -1,0 +1,38 @@
+#!/bin/bash
+# usage: bin/compile <build-dir> <cache-dir>
+
+set -eo pipefail
+
+mkdir -p "$1" "$2"
+build=$(cd "$1/" && pwd)
+cache=$(cd "$2/" && pwd)
+funpack=$(cd $(dirname $0)/.. && pwd)
+
+# tekkit
+tekkit_ver="3.1.2"
+tekkit_url="http://mirror.technicpack.net/Technic/servers/tekkit/Tekkit_Server_$tekkit_ver.zip"
+if test -d $cache/tekkit-$tekkit_ver
+then
+  echo "-----> Using Tekkit $tekkit_ver"
+else
+  mkdir -p $cache/tekkit-$tekkit_ver
+  cd $cache/tekkit-$tekkit_ver
+  echo -n "-----> Installing Tekkit $tekkit_ver"
+  curl --silent -Lo tekkit.zip $tekkit_url
+  unzip tekkit.zip > /dev/null
+  rm tekkit.zip
+  echo " done"
+fi
+mkdir $build/tekkit
+cp -R $cache/tekkit-$tekkit_ver/* $build/tekkit
+
+cd $funpack
+mkdir -p $build/bin
+cp bin/run $build/bin
+cp bin/import $build/bin
+
+cp -R lib $build
+cp -R templates $build
+cp Gemfile $build
+cp Gemfile.lock $build
+cp funpack.json $build
