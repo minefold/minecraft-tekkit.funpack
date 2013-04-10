@@ -33,7 +33,6 @@ env.write_templates(
   'server.properties.erb' => 'server.properties',
 )
 
-
 Open3.popen3("java",
             "-Xms#{env.ram}M", "-Xmx#{env.ram}M",
             "-jar", "Tekkit.jar",

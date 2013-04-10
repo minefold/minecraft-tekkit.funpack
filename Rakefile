@@ -13,7 +13,9 @@ task :start do
   File.write "#{$working_dir}/data.json", <<-EOS
     {
       "name": "Woodbury",
+      "auth": { "whitelist": [] },
       "settings": {
+        "max-players": "22",
         "blacklist": "atnan",
         "gamemode": 2,
         "ops": "whatupdave\\nchrislloyd",
